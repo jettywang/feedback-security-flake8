@@ -20,7 +20,8 @@ from flake8 import processor
 from flake8 import utils
 from flake8._compat import FSTRING_START
 from flake8._compat import TSTRING_START
-from flake8.discover_files import expand_paths
+from flake8.discover_files import discover
+from flake8.discover_files import DiscoveredFiles
 from flake8.options.parse_args import parse_args
 from flake8.plugins.finder import Checkers
 from flake8.plugins.finder import LoadedPlugin
@@ -120,6 +121,12 @@ class Manager:
         self.exclude = (*self.options.exclude, *self.options.extend_exclude)
         self.argv = argv
         self.results: list[tuple[str, Results, dict[str, int]]] = []
+        self.excluded_paths: tuple[str, ...] = ()
+        file_budget = getattr(self.options, "file_budget", None)
+        self.file_budget: int | None = (
+            file_budget if isinstance(file_budget, int) else None
+        )
+        self.discovery_truncated = False
 
     def _process_statistics(self) -> None:
         for _, _, statistics in self.results:
@@ -246,15 +253,37 @@ class Manager:
             :meth:`~Manager.make_checkers`.
         """
         LOG.info("Making checkers")
-        self.filenames = tuple(
-            expand_paths(
-                paths=self.options.filenames,
-                stdin_display_name=self.options.stdin_display_name,
-                filename_patterns=self.options.filename,
-                exclude=self.exclude,
-            ),
+        if self.file_budget is not None and self.file_budget < 0:
+            raise exceptions.ExecutionError(
+                "`--file-budget` must be a non-negative integer, got "
+                f"{self.file_budget}.",
+            )
+
+        discovered = discover(
+            paths=self.options.filenames,
+            stdin_display_name=self.options.stdin_display_name,
+            filename_patterns=self.options.filename,
+            exclude=self.exclude,
+            file_budget=self.file_budget,
         )
+        self.filenames = discovered.files
+        self.excluded_paths = discovered.excluded
+        self.discovery_truncated = discovered.truncated
+        self._report_discovery(discovered)
         self.jobs = min(len(self.filenames), self.jobs)
+
+    def _report_discovery(self, discovered: DiscoveredFiles) -> None:
+        """Log why paths were or were not part of the checked scope."""
+        for excluded_path in discovered.excluded:
+            LOG.info('"%s" excluded from checks', excluded_path)
+
+        if discovered.truncated:
+            LOG.warning(
+                "File budget of %d reached: checking %d file(s), "
+                "further files were not discovered.",
+                discovered.file_budget,
+                len(discovered.files),
+            )
 
     def stop(self) -> None:
         """Stop checking files."""

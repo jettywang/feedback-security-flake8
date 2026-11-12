@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from unittest import mock
@@ -393,4 +394,93 @@ def test_format_option_help(capsys):
 
     out, err = capsys.readouterr()
     assert "(default, pylint, quiet-filename, quiet-nothing)" in out
+    assert err == ""
+
+
+def _make_budget_tree(base):
+    """Build a tree with an excluded dir and an escaping symlink."""
+    for name in ("a.py", "b.py", "c.py", "d.py"):
+        base.joinpath(name).write_text("import os\n")
+
+    vendor = base.joinpath("vendor")
+    vendor.mkdir()
+    vendor.joinpath("v.py").write_text("import sys\n")
+
+    outside = base.parent.joinpath("outside-tree")
+    outside.mkdir(exist_ok=True)
+    outside.joinpath("escape.py").write_text("import re\n")
+    base.joinpath("vendor-link").symlink_to(outside, target_is_directory=True)
+
+
+def test_file_budget_serial_and_parallel_agree(tmp_path, capsys):
+    """Both scheduling modes must check the same budgeted, ordered scope."""
+    _make_budget_tree(tmp_path)
+
+    args = [
+        "--isolated",
+        "--select=F",
+        "--exclude=vendor",
+        "--file-budget=2",
+        str(tmp_path),
+    ]
+
+    assert cli.main(["-j1", *args]) == 1
+    serial_out, serial_err = capsys.readouterr()
+
+    assert cli.main(["-j4", *args]) == 1
+    parallel_out, parallel_err = capsys.readouterr()
+
+    # the symlinked directory must not expand the scope beyond the root
+    assert "escape.py" not in serial_out
+    assert "vendor" not in serial_out
+    # identical, deterministic scope regardless of scheduling mode
+    assert parallel_out == serial_out
+    assert len(serial_out.splitlines()) == 2
+    assert serial_err == parallel_err == ""
+
+
+def test_file_budget_truncation_is_logged(tmp_path, caplog):
+    """Truncation must be reported distinctly from exclusion."""
+    _make_budget_tree(tmp_path)
+
+    with caplog.at_level(logging.INFO, logger="flake8.checker"):
+        assert (
+            cli.main(
+                [
+                    "--isolated",
+                    "--select=F",
+                    "--exclude=vendor",
+                    "--file-budget=1",
+                    str(tmp_path),
+                ],
+            )
+            == 1
+        )
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("excluded from checks" in msg and "vendor" in msg
+               for msg in messages)
+    truncation = next(msg for msg in messages if "File budget" in msg)
+    assert "1" in truncation
+
+
+def test_file_budget_from_config_file(tmp_path, monkeypatch, capsys):
+    """The budget must also be honored when supplied via configuration."""
+    _make_budget_tree(tmp_path)
+    tmp_path.joinpath("setup.cfg").write_text(
+        "[flake8]\nfile_budget = 1\nselect = F\nexclude = vendor\n",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["."]) == 1
+    out, err = capsys.readouterr()
+    assert len(out.splitlines()) == 1
+    assert err == ""
+
+
+def test_negative_file_budget_is_a_critical_error(tmp_path, capsys):
+    _make_budget_tree(tmp_path)
+    assert cli.main(["--isolated", "--file-budget=-1", str(tmp_path)]) == 1
+    out, err = capsys.readouterr()
+    assert "file-budget" in out
     assert err == ""

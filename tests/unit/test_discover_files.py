@@ -4,8 +4,10 @@ import os.path
 
 import pytest
 
+import flake8.discover_files as discover_files
 from flake8 import utils
 from flake8.discover_files import _filenames_from
+from flake8.discover_files import discover
 from flake8.discover_files import expand_paths
 
 
@@ -164,3 +166,138 @@ def test_alternate_stdin_name_is_filtered():
 def test_filename_included_even_if_not_matching_include(tmp_path):
     some_file = str(tmp_path.joinpath("some/file"))
     assert _expand_paths(paths=(some_file,)) == {some_file}
+
+
+def _discover(**kwargs):
+    kwargs.setdefault("paths", (".",))
+    kwargs.setdefault("stdin_display_name", "stdin")
+    kwargs.setdefault("filename_patterns", ("*.py",))
+    kwargs.setdefault("exclude", ())
+    return discover(**kwargs)
+
+
+@pytest.mark.usefixtures("files_dir")
+def test_discover_without_budget_matches_expand_paths():
+    discovered = _discover()
+    assert set(discovered.files) == _normpaths(
+        ("./a/b/c.py", "./a/b/d.py", "./a/b/e/f.py"),
+    )
+    assert discovered.file_budget is None
+    assert discovered.truncated is False
+    assert discovered.excluded == ()
+
+
+@pytest.mark.usefixtures("files_dir")
+def test_discover_budget_truncates_and_preserves_order():
+    full = _discover().files
+    budgeted = _discover(file_budget=2)
+
+    assert len(budgeted.files) == 2
+    # the budgeted set is an ordered prefix of the full discovery
+    assert budgeted.files == full[:2]
+    assert budgeted.file_budget == 2
+    assert budgeted.truncated is True
+
+
+@pytest.mark.usefixtures("files_dir")
+def test_discover_budget_larger_than_files_is_not_truncated():
+    discovered = _discover(file_budget=100)
+    assert discovered.truncated is False
+    assert len(discovered.files) == 3
+    assert discovered.file_budget == 100
+
+
+@pytest.mark.usefixtures("files_dir")
+def test_discover_budget_zero_truncates_immediately():
+    discovered = _discover(file_budget=0)
+    assert discovered.files == ()
+    assert discovered.truncated is True
+    assert discovered.file_budget == 0
+
+
+@pytest.mark.usefixtures("files_dir")
+def test_discover_records_excluded_paths_separately():
+    discovered = _discover(exclude=["d.py"])
+    assert _normpath("./a/b/d.py") in discovered.excluded
+    assert all(not file.endswith("d.py") for file in discovered.files)
+    # exclusion alone must never be flagged as a budget truncation
+    assert discovered.truncated is False
+
+
+@pytest.mark.usefixtures("files_dir")
+def test_discover_exclusion_and_truncation_are_distinguishable():
+    discovered = _discover(exclude=["d.py"], file_budget=1)
+    assert discovered.excluded
+    assert discovered.truncated is True
+    assert len(discovered.files) == 1
+
+
+@pytest.mark.usefixtures("files_dir")
+def test_discover_stops_walking_once_budget_is_reached():
+    """A reached budget closes the walker instead of walking the tree."""
+    closed = []
+    original = discover_files._filenames_from
+
+    class TrackingGenerator:
+        def __init__(self, inner):
+            self.inner = inner
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            return next(self.inner)
+
+        def close(self):
+            closed.append(True)
+            self.inner.close()
+
+    def tracking(*args, **kwargs):
+        return TrackingGenerator(original(*args, **kwargs))
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(discover_files, "_filenames_from", tracking)
+        discovered = _discover(file_budget=1)
+
+    assert len(discovered.files) == 1
+    assert discovered.truncated is True
+    assert closed == [True]
+
+
+def test_discover_does_not_follow_symlinked_directories(tmp_path):
+    outside = tmp_path.joinpath("outside")
+    outside.mkdir()
+    outside.joinpath("escape.py").write_text("import os\n")
+
+    root = tmp_path.joinpath("root")
+    root.mkdir()
+    root.joinpath("inside.py").write_text("import sys\n")
+    root.joinpath("link").symlink_to(outside, target_is_directory=True)
+
+    discovered = _discover(paths=(str(root),))
+    files = set(discovered.files)
+    assert str(root.joinpath("inside.py")) in files
+    assert not any("escape.py" in file for file in files)
+
+
+def test_discover_always_includes_stdin():
+    discovered = _discover(paths=("-",))
+    assert discovered.files == ("-",)
+    assert discovered.truncated is False
+
+
+def test_discover_stdin_counts_toward_budget():
+    discovered = _discover(paths=("-",), file_budget=0)
+    assert discovered.files == ()
+    assert discovered.truncated is True
+
+
+def test_discover_explicit_file_counts_toward_budget(tmp_path):
+    first = tmp_path.joinpath("a.py")
+    second = tmp_path.joinpath("b.py")
+    first.write_text("")
+    second.write_text("")
+
+    discovered = _discover(paths=(str(first), str(second)), file_budget=1)
+    assert discovered.files == (str(first),)
+    assert discovered.truncated is True

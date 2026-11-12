@@ -326,6 +326,37 @@ Options and their Descriptions
             another-example*.py
 
 
+.. option:: --file-budget=<n>
+
+    :ref:`Go back to index <top>`
+
+    Limit the number of files that |Flake8| discovers and checks to at most
+    ``n``. Discovery stays within the paths you provide and stops as soon as
+    the budget is reached, so large trees can return diagnostic results
+    quickly.
+
+    When the budget truncates discovery, |Flake8| logs a warning stating the
+    budget and the number of checked files. This is reported separately from
+    paths skipped by :option:`--exclude` and :option:`--extend-exclude`,
+    which are logged as exclusions.
+
+    When omitted, every lintable file within the provided paths is checked.
+
+    Command-line example:
+
+    .. prompt:: bash
+
+        flake8 --file-budget=100 src/
+
+    This **can** be specified in config files.
+
+    Example config file usage:
+
+    .. code-block:: ini
+
+        file_budget = 100
+
+
 .. option:: --stdin-display-name=<display_name>
 
     :ref:`Go back to index <top>`

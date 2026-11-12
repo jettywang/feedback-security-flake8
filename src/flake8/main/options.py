@@ -117,6 +117,7 @@ def register_default_options(option_manager: OptionManager) -> None:
     - ``--exclude``
     - ``--extend-exclude``
     - ``--filename``
+    - ``--file-budget``
     - ``--format``
     - ``--hang-closing``
     - ``--ignore``
@@ -192,6 +193,19 @@ def register_default_options(option_manager: OptionManager) -> None:
         comma_separated_list=True,
         help="Only check for filenames matching the patterns in this comma-"
         "separated list. (Default: %(default)s)",
+    )
+
+    add_option(
+        "--file-budget",
+        metavar="n",
+        type=int,
+        default=None,
+        parse_from_config=True,
+        help="Limit the number of files Flake8 discovers and checks to at "
+        "most this many. Discovery stops as soon as the budget is reached "
+        "and the truncation is reported separately from excluded paths. "
+        "When omitted, all lintable files within the given paths are "
+        "checked. (Default: no limit)",
     )
 
     add_option(
