@@ -11,6 +11,7 @@ from collections.abc import Generator
 from collections.abc import Sequence
 
 from flake8 import defaults
+from flake8 import noqa_expiry
 from flake8 import statistics
 from flake8 import utils
 from flake8.formatting import base as base_formatter
@@ -422,4 +423,6 @@ class StyleGuide:
             self.formatter.handle(error)
             self.stats.record(error)
             return 1
+        elif error_is_selected:
+            noqa_expiry.record_hidden(error)
         return 0

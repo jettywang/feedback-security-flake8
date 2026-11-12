@@ -11,6 +11,7 @@ import flake8
 from flake8 import checker
 from flake8 import defaults
 from flake8 import exceptions
+from flake8 import noqa_expiry
 from flake8 import style_guide
 from flake8.formatting.base import BaseFormatter
 from flake8.main import debug
@@ -140,6 +141,9 @@ class Application:
         assert self.file_checker_manager is not None
         results = self.file_checker_manager.report()
         self.total_result_count, self.result_count = results
+        recorder = noqa_expiry.active()
+        if recorder is not None:
+            recorder.write_report()
         LOG.info(
             "Found a total of %d violations and reported %d",
             self.total_result_count,
@@ -163,6 +167,7 @@ class Application:
         command-line arguments.
         """
         self.plugins, self.options = parse_args(argv)
+        noqa_expiry.configure(self.options)
 
         if self.options.bug_report:
             info = debug.information(flake8.__version__, self.plugins)

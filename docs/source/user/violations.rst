@@ -115,6 +115,26 @@ comments may appear on one line.  Here are several examples:
     y = 6  # noqa: ABC456  # TODO: will fix this later
 
 
+Dated Exemptions
+----------------
+
+Teams that grant temporary exemptions can attach an expiry date to a
+``# noqa`` comment:
+
+.. code-block:: python
+
+    example = lambda: 'example'  # noqa: E731 [until 2026-12-31]
+
+The dated form suppresses violations exactly like a regular ``# noqa``
+comment.  When :option:`flake8 --noqa-expiry-report` is supplied, Flake8
+additionally records each dated exemption, the violations it actually
+hid, and whether it is ``valid``, ``expired``, or ``unmatched`` (no
+corresponding violation), and writes a JSON report for maintenance
+scripts.  The date used for comparison defaults to today and can be
+pinned with :option:`flake8 --noqa-expiry-date`.  Flake8 never rewrites
+the tracked comments or the code around them.
+
+
 Ignoring Entire Files
 ---------------------
 

@@ -703,6 +703,59 @@ Options and their Descriptions
         disable-noqa = True
 
 
+.. option:: --noqa-expiry-report=FILE
+
+    :ref:`Go back to index <top>`
+
+    Track ``# noqa`` comments that carry an expiry date, e.g.
+    ``# noqa: E501 [until 2026-12-31]``, and write a JSON report to FILE.
+    The report lists every dated exemption with its file, line, error
+    codes, expiry date, the violations it actually hid, and a status of
+    ``valid``, ``expired``, or ``unmatched`` (no corresponding
+    violation).  It is intended to be consumed by maintenance scripts.
+    Plain ``# noqa`` comments are unaffected and Flake8 never rewrites
+    the tracked comments.
+
+    Command-line example:
+
+    .. prompt:: bash
+
+        flake8 --noqa-expiry-report=noqa-expiry.json dir/
+
+    This **can** be specified in config files.
+
+    Example config file usage:
+
+    .. code-block:: ini
+
+        noqa-expiry-report = noqa-expiry.json
+
+
+.. option:: --noqa-expiry-date=YYYY-MM-DD
+
+    :ref:`Go back to index <top>`
+
+    Use this date instead of today to decide whether a dated ``# noqa``
+    exemption has expired.  Only meaningful together with
+    :option:`flake8 --noqa-expiry-report`.  Useful for scheduled
+    maintenance reports and for reproducible output.
+
+    Command-line example:
+
+    .. prompt:: bash
+
+        flake8 --noqa-expiry-report=noqa-expiry.json \
+            --noqa-expiry-date=2026-11-12 dir/
+
+    This **can** be specified in config files.
+
+    Example config file usage:
+
+    .. code-block:: ini
+
+        noqa-expiry-date = 2026-11-12
+
+
 .. option:: --show-source
 
     :ref:`Go back to index <top>`

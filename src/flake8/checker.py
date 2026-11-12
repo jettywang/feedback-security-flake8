@@ -16,6 +16,7 @@ from typing import Optional
 
 from flake8 import defaults
 from flake8 import exceptions
+from flake8 import noqa_expiry
 from flake8 import processor
 from flake8 import utils
 from flake8._compat import FSTRING_START
@@ -182,8 +183,11 @@ class Manager:
         """
         results_reported = results_found = 0
         self.results.sort(key=operator.itemgetter(0))
+        recorder = noqa_expiry.active()
         for filename, results, _ in self.results:
             results.sort(key=operator.itemgetter(1, 2))
+            if recorder is not None:
+                recorder.scan_file(filename)
             with self.style_guide.processing_file(filename):
                 results_reported += self._handle_results(filename, results)
             results_found += len(results)

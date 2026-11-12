@@ -327,6 +327,31 @@ def register_default_options(option_manager: OptionManager) -> None:
         'lines with "# noqa" at the end.',
     )
 
+    add_option(
+        "--noqa-expiry-report",
+        metavar="FILE",
+        default=None,
+        parse_from_config=True,
+        help=(
+            "Track ``# noqa`` comments that carry an expiry date, e.g. "
+            "``# noqa: E501 [until 2026-12-31]``, and write a JSON report "
+            "of valid, expired, and unmatched exemptions to FILE.  "
+            "Plain ``# noqa`` comments are unaffected."
+        ),
+    )
+
+    add_option(
+        "--noqa-expiry-date",
+        metavar="YYYY-MM-DD",
+        default=None,
+        parse_from_config=True,
+        help=(
+            "Use this date instead of today to decide whether a dated "
+            "``# noqa`` exemption has expired.  Only meaningful together "
+            "with --noqa-expiry-report."
+        ),
+    )
+
     # TODO(sigmavirus24): Decide what to do about --show-pep8
 
     add_option(
