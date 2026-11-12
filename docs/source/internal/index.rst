@@ -25,4 +25,5 @@ pull gently.
     formatters
     option_handling
     plugin_handling
+    plugin_lifecycle_contract
     utils
