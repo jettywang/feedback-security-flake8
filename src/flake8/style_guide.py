@@ -9,6 +9,7 @@ import functools
 import logging
 from collections.abc import Generator
 from collections.abc import Sequence
+from typing import NamedTuple
 
 from flake8 import defaults
 from flake8 import statistics
@@ -19,6 +20,30 @@ from flake8.violation import Violation
 __all__ = ("StyleGuide",)
 
 LOG = logging.getLogger(__name__)
+
+
+class SuppressionReason(enum.Enum):
+    """Why a check that ran did or did not reach the final report."""
+
+    Reported = "reported"
+    NotSelected = "not selected by select/ignore rules"
+    PerFileIgnored = "ignored by a per-file-ignores rule"
+    InlineIgnored = "suppressed by a noqa comment"
+
+
+class ViolationExplanation(NamedTuple):
+    """Read-only explanation of what happened to a single check result.
+
+    The physical source line is intentionally excluded: it is only consulted
+    to detect ``noqa`` comments and is never part of the explanation.
+    """
+
+    code: str
+    filename: str
+    line_number: int
+    column_number: int
+    text: str
+    reason: SuppressionReason
 
 
 class Selected(enum.Enum):
@@ -289,6 +314,77 @@ class StyleGuideManager:
         guide = self.style_guide_for(filename)
         return guide.handle_error(
             code, filename, line_number, column_number, text, physical_line,
+        )
+
+    def explain_error(
+        self,
+        code: str,
+        filename: str,
+        line_number: int,
+        column_number: int,
+        text: str,
+        physical_line: str | None = None,
+    ) -> ViolationExplanation:
+        """Explain why a check result was reported or suppressed.
+
+        This traces the same decision path as :meth:`handle_error` without
+        formatting anything, recording statistics, or otherwise mutating the
+        run. It answers whether a check was reported or, if not, whether it
+        was not selected, matched a ``per-file-ignores`` rule, or was
+        suppressed inline by a ``noqa`` comment.
+
+        :param code:
+            The error code found, e.g., E123.
+        :param filename:
+            The file in which the error was found.
+        :param line_number:
+            The line number (where counting starts at 1) at which the error
+            occurs.
+        :param column_number:
+            The column number (where counting starts at 1) at which the error
+            occurs.
+        :param text:
+            The text of the error message.
+        :param physical_line:
+            The physical line causing the error. Only used to detect ``noqa``
+            comments; it is never returned in the explanation.
+        :returns:
+            A :class:`ViolationExplanation` describing the outcome.
+        """
+        guide = self.style_guide_for(filename)
+        # NOTE: column numbers are 0-indexed so we offset them here, matching
+        # :meth:`StyleGuide.handle_error`.
+        if not column_number:
+            column_number = 0
+        error = Violation(
+            code,
+            filename,
+            line_number,
+            column_number + 1,
+            text,
+            physical_line,
+        )
+
+        if guide.should_report_error(error.code) is not Decision.Selected:
+            if (
+                self.default_style_guide.should_report_error(error.code)
+                is Decision.Selected
+            ):
+                reason = SuppressionReason.PerFileIgnored
+            else:
+                reason = SuppressionReason.NotSelected
+        elif error.is_inline_ignored(self.options.disable_noqa):
+            reason = SuppressionReason.InlineIgnored
+        else:
+            reason = SuppressionReason.Reported
+
+        return ViolationExplanation(
+            code=error.code,
+            filename=error.filename,
+            line_number=error.line_number,
+            column_number=error.column_number,
+            text=error.text,
+            reason=reason,
         )
 
 

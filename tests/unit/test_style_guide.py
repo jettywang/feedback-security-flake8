@@ -145,3 +145,158 @@ def test_style_guide_manager_style_guide_for(filename, expected):
 
     file_guide = guide.style_guide_for(filename)
     assert file_guide.filename == expected
+
+
+def _make_manager(**kwargs):
+    """Build a StyleGuideManager with mocked formatter for explanations."""
+    formatter = mock.create_autospec(base.BaseFormatter, instance=True)
+    options = create_options(**kwargs)
+    return style_guide.StyleGuideManager(options, formatter=formatter)
+
+
+@pytest.mark.parametrize(
+    "options_kwargs,filename,code,physical_line,expected_reason",
+    [
+        # selected code on an unannotated line is reported
+        (
+            {"select": ["E", "F", "W"]},
+            "plain.py",
+            "F401",
+            "import os\n",
+            style_guide.SuppressionReason.Reported,
+        ),
+        # a code outside the selected list never reaches the report
+        (
+            {"select": ["E"]},
+            "plain.py",
+            "F401",
+            "import os\n",
+            style_guide.SuppressionReason.NotSelected,
+        ),
+        # a globally selected code ignored for this file only
+        (
+            {
+                "select": ["E", "F", "W"],
+                "per_file_ignores": ["ignored.py:F401"],
+            },
+            "ignored.py",
+            "F401",
+            "import os\n",
+            style_guide.SuppressionReason.PerFileIgnored,
+        ),
+        # per-file rule does not bleed into other files
+        (
+            {
+                "select": ["E", "F", "W"],
+                "per_file_ignores": ["ignored.py:F401"],
+            },
+            "plain.py",
+            "F401",
+            "import os\n",
+            style_guide.SuppressionReason.Reported,
+        ),
+        # selected code silenced by a blanket inline noqa
+        (
+            {"select": ["E", "F", "W"]},
+            "plain.py",
+            "F401",
+            "import os  # noqa\n",
+            style_guide.SuppressionReason.InlineIgnored,
+        ),
+        # selected code silenced by a specific inline noqa
+        (
+            {"select": ["E", "F", "W"]},
+            "plain.py",
+            "F401",
+            "import os  # noqa: F401\n",
+            style_guide.SuppressionReason.InlineIgnored,
+        ),
+        # an unrelated noqa code does not suppress the violation
+        (
+            {"select": ["E", "F", "W"]},
+            "plain.py",
+            "F401",
+            "import os  # noqa: E501\n",
+            style_guide.SuppressionReason.Reported,
+        ),
+        # --disable-noqa makes an inline comment ineffective
+        (
+            {"select": ["E", "F", "W"], "disable_noqa": True},
+            "plain.py",
+            "F401",
+            "import os  # noqa\n",
+            style_guide.SuppressionReason.Reported,
+        ),
+    ],
+)
+def test_explain_error_reasons(
+    options_kwargs, filename, code, physical_line, expected_reason,
+):
+    """Verify explain_error classifies every decision outcome."""
+    guide = _make_manager(**options_kwargs)
+
+    explanation = guide.explain_error(
+        code=code,
+        filename=filename,
+        line_number=1,
+        column_number=0,
+        text="unused import",
+        physical_line=physical_line,
+    )
+
+    assert isinstance(explanation, style_guide.ViolationExplanation)
+    assert explanation.reason is expected_reason
+    assert explanation.code == code
+    assert explanation.filename == filename
+    assert explanation.line_number == 1
+    # the source line is never part of the explanation
+    assert not hasattr(explanation, "physical_line")
+    assert physical_line not in explanation
+
+
+def test_explain_error_does_not_report_or_record():
+    """Verify explaining is read-only and leaves no report state behind."""
+    formatter = mock.create_autospec(base.BaseFormatter, instance=True)
+    options = create_options(select=["E", "F", "W"])
+    guide = style_guide.StyleGuideManager(options, formatter=formatter)
+
+    explanation = guide.explain_error(
+        code="F401",
+        filename="plain.py",
+        line_number=2,
+        column_number=4,
+        text="unused import",
+        physical_line="import os  # noqa\n",
+    )
+
+    assert explanation.reason is style_guide.SuppressionReason.InlineIgnored
+    formatter.handle.assert_not_called()
+    formatter.beginning.assert_not_called()
+    assert guide.stats.error_codes() == []
+
+
+def test_explain_error_matches_handle_error_outcome():
+    """Verify the explanation agrees with the actual reporting decision."""
+    formatter = mock.create_autospec(base.BaseFormatter, instance=True)
+    options = create_options(
+        select=["E", "F", "W"],
+        per_file_ignores=["ignored.py:F401"],
+    )
+    guide = style_guide.StyleGuideManager(options, formatter=formatter)
+
+    cases = [
+        ("plain.py", "import os\n", 1),
+        ("plain.py", "import os  # noqa\n", 0),
+        ("ignored.py", "import os\n", 0),
+    ]
+    for filename, physical_line, reported in cases:
+        handled = guide.handle_error(
+            "F401", filename, 1, 0, "unused import", physical_line,
+        )
+        explanation = guide.explain_error(
+            "F401", filename, 1, 0, "unused import", physical_line,
+        )
+        expects_report = (
+            explanation.reason is style_guide.SuppressionReason.Reported
+        )
+        assert bool(handled) is expects_report

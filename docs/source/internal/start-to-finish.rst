@@ -95,6 +95,16 @@ relies on a :class:`~flake8.style_guide.DecisionEngine` instance to determine
 whether the particular :term:`error code` is selected or ignored and then
 appropriately sends it to the formatter (or not).
 
+A code review tool that only receives the final list of warnings can call
+:meth:`~flake8.style_guide.StyleGuideManager.explain_error` to trace the same
+decision path without formatting anything or recording statistics. The
+returned :class:`~flake8.style_guide.ViolationExplanation` classifies each
+check result with a
+:class:`~flake8.style_guide.SuppressionReason`: it was reported, not selected
+by the select/ignore rules, ignored by a ``per-file-ignores`` rule, or
+suppressed inline by a ``noqa`` comment. The physical source line is only
+consulted to detect ``noqa`` and is never included in the explanation.
+
 Reporting Benchmarks
 --------------------
 
