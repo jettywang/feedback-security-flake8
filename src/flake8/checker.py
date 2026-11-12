@@ -281,12 +281,23 @@ class FileChecker:
             "logical lines": 0,
             "physical lines": 0,
         }
+        # When the file is ignored by a file-level ``# flake8: noqa``
+        # comment but the caller requires some codes to always be
+        # reported, the file is still processed and only the required
+        # codes are reported.
+        self.required_codes_only = False
         self.processor = self._make_processor()
         self.display_name = filename
         self.should_process = False
         if self.processor is not None:
             self.display_name = self.processor.filename
-            self.should_process = not self.processor.should_ignore_file()
+            file_is_ignored = self.processor.should_ignore_file()
+            self.should_process = (
+                not file_is_ignored or bool(self.options.require_codes)
+            )
+            self.required_codes_only = (
+                file_is_ignored and self.should_process
+            )
             self.statistics["physical lines"] = len(self.processor.lines)
 
     def __repr__(self) -> str:
@@ -316,6 +327,11 @@ class FileChecker:
         """Report an error by storing it in the results list."""
         if error_code is None:
             error_code, text = text.split(" ", 1)
+
+        if self.required_codes_only and not error_code.startswith(
+            tuple(self.options.require_codes)
+        ):
+            return error_code
 
         # If we're recovering from a problem in _make_processor, we will not
         # have this attribute.

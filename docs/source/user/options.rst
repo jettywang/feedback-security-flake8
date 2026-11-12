@@ -72,6 +72,8 @@ Index of Options
 
 - :option:`flake8 --extend-select`
 
+- :option:`flake8 --require-codes`
+
 - :option:`flake8 --disable-noqa`
 
 - :option:`flake8 --show-source`
@@ -675,6 +677,30 @@ Options and their Descriptions
             E4,
             E51,
             W234
+
+
+.. option:: --require-codes=<errors>
+
+    :ref:`Go back to index <top>`
+
+    Specify a list of error codes which must always be reported.
+
+    Codes matching this list cannot be silenced by :option:`--ignore`,
+    :option:`--extend-ignore`, :option:`--per-file-ignores` or ``# noqa``
+    comments (including file-level ``# flake8: noqa`` comments).  This is
+    intended for callers such as a CI system which need to guarantee that
+    certain checks (for example, security checks) are always reported,
+    while still allowing the repository to configure any other ignores.
+
+    Command-line example:
+
+    .. prompt:: bash
+
+        flake8 --require-codes=S100,S101 dir/
+
+    This **cannot** be specified in config files.  It can only be specified
+    on the command line so that the invoking caller stays in control of the
+    set of required codes.
 
 
 .. option:: --disable-noqa

@@ -17,6 +17,7 @@ def create_options(**kwargs):
     kwargs.setdefault("extended_default_select", ["C90", "F", "E", "W"])
     kwargs.setdefault("extended_default_ignore", [])
     kwargs.setdefault("disable_noqa", False)
+    kwargs.setdefault("require_codes", None)
     return argparse.Namespace(**kwargs)
 
 
@@ -243,3 +244,39 @@ def test_plugin_extends_default_ignore_but_extend_selected():
     )
 
     assert decider.decision_for("P002") is style_guide.Decision.Selected
+
+
+SEL = style_guide.Decision.Selected
+IGN = style_guide.Decision.Ignored
+
+
+@pytest.mark.parametrize(
+    "select_list,ignore_list,extend_ignore,required,error_code,expected",
+    [
+        # a required code is selected even when explicitly ignored
+        (None, ["S100"], None, ["S100"], "S100", SEL),
+        (None, None, ["S100"], ["S100"], "S100", SEL),
+        (None, ["S"], None, ["S100"], "S100", SEL),
+        # a required code is selected even when not otherwise selected
+        (["E"], None, None, ["S100"], "S100", SEL),
+        # required codes prefix-match like select / ignore
+        (None, ["S"], None, ["S1"], "S100", SEL),
+        # non-required codes are unaffected
+        (None, ["S101"], None, ["S100"], "S101", IGN),
+        (["E"], None, None, ["S100"], "S101", IGN),
+    ],
+)
+def test_decision_for_required_codes(
+    select_list, ignore_list, extend_ignore, required, error_code, expected,
+):
+    """Verify that required codes cannot be ignored."""
+    decider = style_guide.DecisionEngine(
+        create_options(
+            select=select_list,
+            ignore=ignore_list,
+            extend_ignore=extend_ignore,
+            require_codes=required,
+        ),
+    )
+
+    assert decider.decision_for(error_code) is expected

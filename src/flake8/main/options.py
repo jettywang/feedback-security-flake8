@@ -127,6 +127,7 @@ def register_default_options(option_manager: OptionManager) -> None:
     - ``--indent-size``
     - ``--select``
     - ``--extend-select``
+    - ``--require-codes``
     - ``--disable-noqa``
     - ``--show-source``
     - ``--statistics``
@@ -315,6 +316,21 @@ def register_default_options(option_manager: OptionManager) -> None:
             "You usually do not need to specify this option as the default "
             "includes all installed plugin codes.  "
             "For example, ``--extend-select=E4,E51,W234``."
+        ),
+    )
+
+    add_option(
+        "--require-codes",
+        metavar="errors",
+        comma_separated_list=True,
+        help=(
+            "Comma-separated list of error codes which must always be "
+            "reported.  Codes matching this list cannot be silenced by "
+            "``--ignore``, ``--extend-ignore``, ``--per-file-ignores`` or "
+            "``# noqa`` comments.  This is intended for checks enforced "
+            "by the caller (e.g. in CI) and can only be specified on the "
+            "command line.  "
+            "For example, ``--require-codes=S100,S101``."
         ),
     )
 

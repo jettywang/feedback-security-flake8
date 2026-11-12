@@ -99,6 +99,18 @@ class DecisionEngine:
             extend=options.extend_ignore,
         )
 
+        self.required = tuple(options.require_codes or ())
+
+    def is_required(self, code: str) -> bool:
+        """Determine if the code must always be reported.
+
+        Required codes cannot be disabled by ``ignore``,
+        ``per-file-ignores`` or ``# noqa`` comments.
+
+        :param code: The code for the check that has been run.
+        """
+        return code.startswith(self.required)
+
     def was_selected(self, code: str) -> Selected | Ignored:
         """Determine if the code has been selected by the user.
 
@@ -138,6 +150,9 @@ class DecisionEngine:
 
     def make_decision(self, code: str) -> Decision:
         """Decide if code should be ignored or selected."""
+        if self.is_required(code):
+            return Decision.Selected
+
         selected = self.was_selected(code)
         ignored = self.was_ignored(code)
         LOG.debug(
@@ -417,7 +432,10 @@ class StyleGuide:
         error_is_selected = (
             self.should_report_error(error.code) is Decision.Selected
         )
-        is_not_inline_ignored = error.is_inline_ignored(disable_noqa) is False
+        is_not_inline_ignored = (
+            self.decider.is_required(error.code)
+            or error.is_inline_ignored(disable_noqa) is False
+        )
         if error_is_selected and is_not_inline_ignored:
             self.formatter.handle(error)
             self.stats.record(error)

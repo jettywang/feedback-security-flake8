@@ -23,6 +23,7 @@ def create_options(**kwargs):
     kwargs.setdefault("disable_noqa", False)
     kwargs.setdefault("enable_extensions", [])
     kwargs.setdefault("per_file_ignores", [])
+    kwargs.setdefault("require_codes", None)
     return argparse.Namespace(**kwargs)
 
 
@@ -145,3 +146,44 @@ def test_style_guide_manager_style_guide_for(filename, expected):
 
     file_guide = guide.style_guide_for(filename)
     assert file_guide.filename == expected
+
+
+@pytest.mark.parametrize(
+    "require_codes,physical_line,expected",
+    [
+        # without required codes a ``# noqa`` comment silences the error
+        (None, "x = 1  # noqa", 0),
+        (None, "x = 1  # noqa: S100", 0),
+        # required codes are reported despite ``# noqa`` comments
+        (["S100"], "x = 1  # noqa", 1),
+        (["S100"], "x = 1  # noqa: S100", 1),
+        # unrelated codes are still silenced
+        (["S101"], "x = 1  # noqa", 0),
+    ],
+)
+def test_handle_error_required_codes_bypass_noqa(
+    require_codes, physical_line, expected,
+):
+    """Verify that required codes are reported despite ``# noqa``."""
+    formatter = mock.create_autospec(base.BaseFormatter, instance=True)
+    guide = style_guide.StyleGuide(
+        create_options(require_codes=require_codes),
+        formatter=formatter,
+        stats=statistics.Statistics(),
+    )
+
+    assert expected == guide.handle_error(
+        "S100", "file.py", 1, 1, "error found", physical_line,
+    )
+
+
+def test_style_guide_manager_required_codes_ignore_per_file_ignores():
+    """Verify required codes are reported despite per-file-ignores."""
+    formatter = mock.create_autospec(base.BaseFormatter, instance=True)
+    options = create_options(
+        per_file_ignores=["first_file.py:S100"],
+        require_codes=["S100"],
+    )
+    guide = style_guide.StyleGuideManager(options, formatter=formatter)
+
+    assert guide.handle_error("S100", "first_file.py", 1, 1, "text") == 1
