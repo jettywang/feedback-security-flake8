@@ -225,6 +225,8 @@ Or they could use each comment to describe **why** they've ignored the check.
 these situations.
 
 
+.. _local-plugins:
+
 Using Local Plugins
 -------------------
 
@@ -292,3 +294,11 @@ whatever Python environment |Flake8| runs in.
 .. note::
 
     These plugins otherwise follow the same guidelines as regular plugins.
+
+Because local plugins are described by the project being checked, an
+automated reviewer that does not trust that project can pass
+:option:`flake8 --no-local-plugins`. When it is enabled, |Flake8| still reads
+the project's ordinary configuration but skips every entry in
+``flake8:local-plugins`` and does not add the section's ``paths`` to
+``sys.path``, so no project-provided plugin code is imported. Only plugins
+installed in the environment are then available.

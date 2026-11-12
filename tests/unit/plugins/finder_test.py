@@ -469,6 +469,22 @@ def test_parse_plugin_options_local_plugin_paths(tmp_path):
     assert opts.local_plugin_paths == expected
 
 
+def test_parse_plugin_options_no_local_plugins_ignores_paths(tmp_path):
+    cfg = configparser.RawConfigParser()
+    cfg.add_section("flake8:local-plugins")
+    cfg.set("flake8:local-plugins", "paths", "./a, ./b")
+    opts = finder.parse_plugin_options(
+        cfg,
+        str(tmp_path),
+        enable_extensions=None,
+        require_plugins=None,
+        no_local_plugins=True,
+    )
+
+    assert opts.local_plugin_paths == ()
+    assert opts.no_local_plugins is True
+
+
 def test_find_plugins(
     tmp_path,
     flake8_dist,
@@ -560,6 +576,33 @@ def test_find_plugins(
             ),
         ),
     ]
+
+
+def test_find_plugins_no_local_plugins(
+    tmp_path,
+    flake8_dist,
+    flake8_foo_dist,
+    mock_distribution,
+    local_plugin_cfg,
+):
+    """Restricted mode keeps environment plugins but skips local plugins."""
+    opts = finder.PluginOptions(
+        local_plugin_paths=(),
+        enable_extensions=frozenset(),
+        require_plugins=frozenset(),
+        no_local_plugins=True,
+    )
+    with mock.patch.object(
+        importlib.metadata,
+        "distributions",
+        return_value=[flake8_dist, flake8_foo_dist],
+    ):
+        ret = finder.find_plugins(local_plugin_cfg, opts)
+
+    packages = {plugin.package for plugin in ret}
+    assert "local" not in packages
+    # review-service approved (installed) plugins are still available
+    assert {"flake8", "flake8-foo", "pyflakes", "pycodestyle"} <= packages
 
 
 def test_find_plugins_plugin_is_present(flake8_foo_dist):
@@ -725,6 +768,27 @@ def test_import_plugins_extends_sys_path():
             {"tree": True},
         ),
     ]
+
+
+@pytest.mark.usefixtures("reset_sys")
+def test_import_plugins_no_local_plugins_skips_sys_path():
+    plugin = _plugin(ep=_ep(value="aplugin:ExtensionTestPlugin2"))
+
+    opts = finder.PluginOptions(
+        local_plugin_paths=("tests/integration/subdir",),
+        enable_extensions=frozenset(),
+        require_plugins=frozenset(),
+        no_local_plugins=True,
+    )
+
+    original_path = sys.path[:]
+    with pytest.raises(FailedToLoadPlugin):
+        finder._import_plugins([plugin], opts)
+
+    # the project-provided path was never put on `sys.path`, so the module
+    # could not have been imported
+    assert sys.path == original_path
+    assert "aplugin" not in sys.modules
 
 
 def test_classify_plugins():

@@ -7,7 +7,12 @@ from typing import Any
 from flake8.plugins.finder import Plugins
 
 
-def information(version: str, plugins: Plugins) -> dict[str, Any]:
+def information(
+    version: str,
+    plugins: Plugins,
+    *,
+    no_local_plugins: bool = False,
+) -> dict[str, Any]:
     """Generate the information to be printed for the bug report."""
     versions = sorted(
         {
@@ -22,6 +27,7 @@ def information(version: str, plugins: Plugins) -> dict[str, Any]:
             {"plugin": plugin, "version": version}
             for plugin, version in versions
         ],
+        "no_local_plugins": no_local_plugins,
         "platform": {
             "python_implementation": platform.python_implementation(),
             "python_version": platform.python_version(),

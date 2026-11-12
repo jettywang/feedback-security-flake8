@@ -42,9 +42,21 @@ def test_debug_information():
             {"plugin": "pkg1", "version": "1.2.3"},
             {"plugin": "pkg2", "version": "4.5.6"},
         ],
+        "no_local_plugins": False,
         "platform": {
             "python_implementation": mock.ANY,
             "python_version": mock.ANY,
             "system": mock.ANY,
         },
     }
+
+
+def test_debug_information_no_local_plugins():
+    plugins = finder.Plugins(
+        checkers=finder.Checkers(tree=[], logical_line=[], physical_line=[]),
+        reporters={},
+        disabled=[],
+    )
+
+    info = debug.information("9001", plugins, no_local_plugins=True)
+    assert info["no_local_plugins"] is True

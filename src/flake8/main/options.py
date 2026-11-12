@@ -18,6 +18,7 @@ def stage1_arg_parser() -> argparse.ArgumentParser:
     - ``--config``
     - ``--isolated``
     - ``--enable-extensions``
+    - ``--no-local-plugins``
     """
     parser = argparse.ArgumentParser(add_help=False)
 
@@ -73,6 +74,17 @@ def stage1_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--require-plugins",
         help="Require specific plugins to be installed before running",
+    )
+
+    parser.add_argument(
+        "--no-local-plugins",
+        default=False,
+        action="store_true",
+        help="Do not discover or load local plugins declared in the project "
+        "configuration. Ordinary configuration options are still applied; "
+        "only plugins installed in the environment (for example approved by "
+        "the invoking review service) are used. This option cannot be set "
+        "from configuration files.",
     )
 
     return parser

@@ -165,7 +165,11 @@ class Application:
         self.plugins, self.options = parse_args(argv)
 
         if self.options.bug_report:
-            info = debug.information(flake8.__version__, self.plugins)
+            info = debug.information(
+                flake8.__version__,
+                self.plugins,
+                no_local_plugins=self.options.no_local_plugins,
+            )
             print(json.dumps(info, indent=2, sort_keys=True))
             raise SystemExit(0)
 

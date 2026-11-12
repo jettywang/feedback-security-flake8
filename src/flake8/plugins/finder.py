@@ -94,6 +94,7 @@ class PluginOptions(NamedTuple):
     local_plugin_paths: tuple[str, ...]
     enable_extensions: frozenset[str]
     require_plugins: frozenset[str]
+    no_local_plugins: bool = False
 
     @classmethod
     def blank(cls) -> PluginOptions:
@@ -130,11 +131,18 @@ def parse_plugin_options(
     *,
     enable_extensions: str | None,
     require_plugins: str | None,
+    no_local_plugins: bool = False,
 ) -> PluginOptions:
     """Parse plugin loading related options."""
     paths_s = cfg.get("flake8:local-plugins", "paths", fallback="").strip()
-    paths = utils.parse_comma_separated_list(paths_s)
-    paths = utils.normalize_paths(paths, cfg_dir)
+    if no_local_plugins:
+        # the caller has opted out of project-provided plugins: config files
+        # are still read for ordinary options, but nothing in the project is
+        # added to ``sys.path`` for plugin imports
+        paths: list[str] = []
+    else:
+        paths = utils.parse_comma_separated_list(paths_s)
+        paths = utils.normalize_paths(paths, cfg_dir)
 
     return PluginOptions(
         local_plugin_paths=tuple(paths),
@@ -144,6 +152,7 @@ def parse_plugin_options(
         require_plugins=frozenset(
             _parse_option(cfg, "require_plugins", require_plugins),
         ),
+        no_local_plugins=no_local_plugins,
     )
 
 
@@ -249,7 +258,13 @@ def find_plugins(
     opts: PluginOptions,
 ) -> list[Plugin]:
     """Discovers all plugins (but does not load them)."""
-    ret = [*_find_importlib_plugins(), *_find_local_plugins(cfg)]
+    ret = [*_find_importlib_plugins()]
+
+    # local plugins are declared in the project configuration and therefore
+    # are not a review-service-approved source -- skip them when the caller
+    # has enabled the restricted mode
+    if not opts.no_local_plugins:
+        ret.extend(_find_local_plugins(cfg))
 
     # for determinism, sort the list
     ret.sort()
@@ -303,7 +318,10 @@ def _import_plugins(
     plugins: list[Plugin],
     opts: PluginOptions,
 ) -> list[LoadedPlugin]:
-    sys.path.extend(opts.local_plugin_paths)
+    # only project configuration ever contributes paths here, so there is
+    # nothing to add in restricted mode
+    if not opts.no_local_plugins:
+        sys.path.extend(opts.local_plugin_paths)
     return [_load_plugin(p) for p in plugins]
 
 

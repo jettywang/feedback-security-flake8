@@ -82,6 +82,8 @@ Index of Options
 
 - :option:`flake8 --enable-extensions`
 
+- :option:`flake8 --no-local-plugins`
+
 - :option:`flake8 --exit-zero`
 
 - :option:`flake8 --jobs`
@@ -803,6 +805,33 @@ Options and their Descriptions
         enable_extensions =
             H111,
             G123
+
+
+.. option:: --no-local-plugins
+
+    :ref:`Go back to index <top>`
+
+    Do not discover or load :ref:`local plugins <local-plugins>` declared in
+    the project's configuration.
+
+    Ordinary configuration options from the project are still applied; only
+    the discovery and loading of plugins is restricted. Plugins installed in
+    the environment (for example those approved by an automated code review
+    service) continue to be used, while plugin entry points and ``paths``
+    supplied by the checked-out project are ignored and never imported.
+
+    Because the point of this option is to prevent an untrusted project from
+    controlling which code is imported, this **cannot** be specified in
+    configuration files. It is only accepted on the command line so the
+    invoking service, rather than the project, decides whether the boundary
+    is enabled. The active boundary is also reported by
+    :option:`flake8 --bug-report`.
+
+    Command-line example:
+
+    .. prompt:: bash
+
+        flake8 --no-local-plugins dir/
 
 
 .. option:: --exit-zero

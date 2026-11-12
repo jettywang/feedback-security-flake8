@@ -37,6 +37,7 @@ def parse_args(
         cfg_dir,
         enable_extensions=args0.enable_extensions,
         require_plugins=args0.require_plugins,
+        no_local_plugins=args0.no_local_plugins,
     )
     raw_plugins = finder.find_plugins(cfg, plugin_opts)
     plugins = finder.load_plugins(raw_plugins, plugin_opts)
@@ -51,6 +52,10 @@ def parse_args(
     option_manager.register_plugins(plugins)
 
     opts = aggregator.aggregate_options(option_manager, cfg, cfg_dir, rest)
+
+    # this is a preliminary (stage 1 only) option: the second-stage parser
+    # does not see it on the command line, so forward the parsed value
+    opts.no_local_plugins = args0.no_local_plugins
 
     for loaded in plugins.all_plugins():
         parse_options = getattr(loaded.obj, "parse_options", None)
